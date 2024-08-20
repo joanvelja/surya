@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # Text recognition
     RECOGNITION_MODEL_CHECKPOINT: str = "vikp/surya_rec2"
     RECOGNITION_MAX_TOKENS: int = 175
-    RECOGNITION_BATCH_SIZE: Optional[int] = None # Defaults to 8 for CPU/MPS, 256 otherwise
+    RECOGNITION_BATCH_SIZE: Optional[int] = 128 # Defaults to 8 for CPU/MPS, 256 otherwise
     RECOGNITION_IMAGE_SIZE: Dict = {"height": 256, "width": 896}
     RECOGNITION_RENDER_FONTS: Dict[str, str] = {
         "all": os.path.join(FONT_DIR, "GoNotoCurrent-Regular.ttf"),

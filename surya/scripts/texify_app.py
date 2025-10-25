@@ -5,10 +5,9 @@ from typing import List
 from surya.recognition import RecognitionPredictor
 from surya.foundation import FoundationPredictor
 from surya.common.surya.schema import TaskNames
+from surya._mps import configure_mps_support
 
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = (
-    "1"  # For some reason, transformers decided to use .isin for a simple op, which is not supported on MPS
-)
+configure_mps_support()
 
 import io
 

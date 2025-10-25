@@ -1,7 +1,3 @@
-import os
-
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-
 import pytest
 from PIL import Image, ImageDraw
 
@@ -12,6 +8,9 @@ from surya.recognition import RecognitionPredictor
 from surya.foundation import FoundationPredictor
 from surya.table_rec import TableRecPredictor
 from surya.settings import settings
+from surya._mps import configure_mps_support
+
+configure_mps_support()
 
 @pytest.fixture(scope="session")
 def ocr_error_predictor() -> OCRErrorPredictor:

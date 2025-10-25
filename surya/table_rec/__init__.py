@@ -95,31 +95,35 @@ class TableRecPredictor(BasePredictor):
                             k_logits = torch.clamp(k_logits, min=1)
                             processed_logits[k] = torch.round(k_logits)
 
-                items = {k: processed_logits[k].cpu() for k, _, _ in BOX_PROPERTIES}
                 for j in range(current_batch_size):
                     box_property = {}
                     for k, _, mode in BOX_PROPERTIES:
                         if mode == "classification":
-                            box_property[k] = int(items[k][j].item())
+                            box_property[k] = int(processed_logits[k][j].item())
                         elif mode == "regression":
                             if k == "bbox":
-                                box_property[k] = items[k][j].tolist()
+                                box_property[k] = processed_logits[k][j].tolist()
                             elif k == "colspan":
-                                box_property[k] = int(items[k][j].item())
+                                box_property[k] = int(processed_logits[k][j].item())
                     box_properties.append(box_property)
 
                 all_done = all_done | done
-                all_done_cpu = all_done.cpu()
+                active_mask = all_done[:current_batch_size]
 
-                if all_done_cpu[:current_batch_size].all():
+                if bool(active_mask.all()):
                     break
 
-                batch_input_ids = torch.tensor(shaper.dict_to_labels(box_properties), dtype=torch.long)
+                labels = shaper.dict_to_labels(box_properties)
+                batch_input_ids = torch.tensor(
+                    labels,
+                    dtype=torch.long,
+                    device=self.model.device,
+                )
                 batch_input_ids = batch_input_ids.unsqueeze(1)  # Add sequence length dimension
 
-                for j, (box_property, status) in enumerate(zip(box_properties, all_done_cpu)):
-                    if not status:
-                        batch_predictions[j].append(box_property)
+                pending_indices = torch.nonzero(~active_mask, as_tuple=False).flatten()
+                for idx in pending_indices.tolist():
+                    batch_predictions[idx].append(box_properties[idx])
 
                 token_count += inference_token_count
                 inference_token_count = batch_input_ids.shape[1]

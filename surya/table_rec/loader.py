@@ -34,13 +34,6 @@ class TableRecModelLoader(ModelLoader):
         if dtype is None:
             dtype = settings.MODEL_DTYPE
 
-        if device == "mps":
-            logger.warning(
-                "`TableRecEncoderDecoderModel` is not compatible with mps backend. Defaulting to cpu instead"
-            )
-            device = "cpu"
-            dtype = "float32"
-
         config = SuryaTableRecConfig.from_pretrained(self.checkpoint)
         decoder_config = config.decoder
         decoder = SuryaTableRecDecoderConfig(**decoder_config)
@@ -50,11 +43,27 @@ class TableRecModelLoader(ModelLoader):
         encoder = DonutSwinTableRecConfig(**encoder_config)
         config.encoder = encoder
 
+        target_device = device
+        target_dtype = dtype
+
         model = TableRecEncoderDecoderModel.from_pretrained(
-            self.checkpoint, config=config, dtype=dtype
+            self.checkpoint, config=config, dtype=target_dtype
         )
 
-        model = model.to(device)
+        try:
+            model = model.to(device=target_device)
+        except (RuntimeError, NotImplementedError) as exc:
+            if str(target_device) != "mps":
+                raise
+
+            logger.warning(
+                "Failed to move TableRecEncoderDecoderModel to MPS (%s); falling back to CPU float32.",
+                exc,
+            )
+            target_device = "cpu"
+            target_dtype = torch.float32
+            model = model.to(dtype=target_dtype, device=target_device)
+
         model = model.eval()
 
         if settings.COMPILE_ALL or settings.COMPILE_TABLE_REC:
@@ -63,14 +72,14 @@ class TableRecModelLoader(ModelLoader):
             torch._dynamo.config.suppress_errors = False
 
             logger.info(
-                f"Compiling table recognition model {self.checkpoint} on device {device} with dtype {dtype}"
+                f"Compiling table recognition model {self.checkpoint} on device {target_device} with dtype {target_dtype}"
             )
-            compile_args = {"backend": "openxla"} if device == "xla" else {}
+            compile_args = {"backend": "openxla"} if target_device == "xla" else {}
             model.encoder = torch.compile(model.encoder, **compile_args)
             model.decoder = torch.compile(model.decoder, **compile_args)
 
         logger.debug(
-            f"Loaded table recognition model {self.checkpoint} from {TableRecEncoderDecoderModel.get_local_path(self.checkpoint)} onto device {device} with dtype {dtype}"
+            f"Loaded table recognition model {self.checkpoint} from {TableRecEncoderDecoderModel.get_local_path(self.checkpoint)} onto device {target_device} with dtype {target_dtype}"
         )
         return model
 
